@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мини-трекер учебных задач</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f5f7fb; color: #182235; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px; }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 5vw, 2rem); }
+    h2 { margin: 0 0 16px; font-size: 1.15rem; }
+    .intro { margin: 0 0 22px; color: #475569; }
+    .panel { background: white; border: 1px solid #dce3ee; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 160px); gap: 14px; }
+    .field { min-width: 0; }
+    label { display: block; font-weight: 650; margin-bottom: 6px; }
+    input { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #94a3b8; border-radius: 8px; font: inherit; background: white; color: inherit; }
+    input:focus-visible, button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+    input[aria-invalid="true"] { border-color: #b42318; }
+    .error { color: #b42318; font-size: .875rem; margin: 5px 0 0; min-height: 1.2em; }
+    button { font: inherit; cursor: pointer; border-radius: 8px; padding: 10px 14px; border: 1px solid #a9b7cb; background: #fff; color: #182235; }
+    button:hover { background: #f0f5ff; }
+    .primary { margin-top: 10px; color: white; background: #1647a6; border-color: #1647a6; font-weight: 650; }
+    .primary:hover { background: #103a8c; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .stat { padding: 12px; border-radius: 10px; background: #f0f5ff; min-width: 0; }
+    .stat span { display: block; color: #475569; font-size: .9rem; }
+    .stat strong { display: block; margin-top: 5px; font-size: 1.4rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .filters button[aria-pressed="true"] { background: #1647a6; color: white; border-color: #1647a6; }
+    .tasks { padding: 0; margin: 0; list-style: none; }
+    .task { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #e2e8f0; padding: 12px 0; min-width: 0; }
+    .task-main { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1; }
+    .task-main input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; cursor: pointer; }
+    .task-info { min-width: 0; overflow-wrap: anywhere; }
+    .task-title { font-weight: 600; }
+    .task.done .task-title { text-decoration: line-through; color: #64748b; }
+    .task-hours { color: #475569; font-size: .9rem; margin-top: 3px; }
+    .delete { flex: none; color: #9f2525; border-color: #e2b5b5; }
+    .empty { color: #475569; margin: 8px 0 0; }
+    .notice { border: 1px solid #e9c46a; border-radius: 8px; background: #fff8e5; padding: 10px 12px; margin: 0 0 16px; overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+    @media (max-width: 480px) {
+      body { padding: 16px 12px; }
+      .panel { padding: 15px; }
+      .form-grid { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+      .stats { gap: 6px; }
+      .stat { padding: 9px 7px; }
+      .stat span { font-size: .78rem; }
+      .stat strong { font-size: 1.1rem; }
+      .task { align-items: flex-start; }
+      .delete { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Мини-трекер учебных задач</h1>
+    <p class="intro">План на неделю: задачи, часы и прогресс выполнения.</p>
+    <p id="storage-notice" class="notice" role="status" hidden>Локальное сохранение недоступно. Задачи продолжат работать до закрытия или обновления страницы, но могут не сохраниться.</p>
+
+    <section class="panel" aria-labelledby="add-heading">
+      <h2 id="add-heading">Добавить задачу</h2>
+      <form id="task-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="task-title">Название задачи</label>
+            <input id="task-title" name="title" type="text" autocomplete="off" aria-describedby="title-error">
+            <p class="error" id="title-error" aria-live="polite"></p>
+          </div>
+          <div class="field">
+            <label for="task-hours">Часы (0,5–24)</label>
+            <input id="task-hours" name="hours" type="number" min="0.5" max="24" step="0.5" inputmode="decimal" aria-describedby="hours-error">
+            <p class="error" id="hours-error" aria-live="polite"></p>
+          </div>
+        </div>
+        <button class="primary" type="submit">Добавить задачу</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="stats-heading">
+      <h2 id="stats-heading">Итоги по всем задачам</h2>
+      <div class="stats">
+        <div class="stat"><span>Всего</span><strong id="total-hours">8 ч</strong></div>
+        <div class="stat"><span>Выполнено</span><strong id="done-hours">2 ч</strong></div>
+        <div class="stat"><span>Прогресс</span><strong id="progress">25%</strong></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="list-heading">
+      <h2 id="list-heading">Задачи</h2>
+      <div class="filters" role="group" aria-label="Фильтр задач">
+        <button type="button" data-filter="all" aria-pressed="true">Все</button>
+        <button type="button" data-filter="active" aria-pressed="false">Активные</button>
+        <button type="button" data-filter="done" aria-pressed="false">Выполненные</button>
+      </div>
+      <ul class="tasks" id="task-list"></ul>
+      <p class="empty" id="empty-message" hidden>Нет задач для отображения.</p>
+    </section>
+  </main>
+
+  <script>
+    'use strict';
+
+    const STORAGE_KEY = 'weekly-study-tracker-v2';
+    const initialTasks = [
+      { id: 'task-1', title: 'Чтение', hours: 2, done: true },
+      { id: 'task-2', title: 'Практика', hours: 4, done: false },
+      { id: 'task-3', title: 'Повторение', hours: 2, done: false }
+    ];
+
+    const form = document.getElementById('task-form');
+    const titleInput = document.getElementById('task-title');
+    const hoursInput = document.getElementById('task-hours');
+    const titleError = document.getElementById('title-error');
+    const hoursError = document.getElementById('hours-error');
+    const list = document.getElementById('task-list');
+    const emptyMessage = document.getElementById('empty-message');
+    const storageNotice = document.getElementById('storage-notice');
+    const filterButtons = Array.from(document.querySelectorAll('[data-filter]'));
+
+    let tasks = initialTasks.map(task => ({ ...task }));
+    let filter = 'all';
+    let nextId = 4;
+    let storageAvailable = true;
+
+    function validTask(task) {
+      return task !== null && typeof task === 'object' && !Array.isArray(task) &&
+        typeof task.id === 'string' && task.id.length > 0 &&
+        typeof task.title === 'string' && task.title.trim().length > 0 &&
+        typeof task.hours === 'number' && Number.isFinite(task.hours) &&
+        task.hours >= 0.5 && task.hours <= 24 && Number.isInteger(task.hours * 2) &&
+        typeof task.done === 'boolean';
+    }
+
+    function warnStorage() {
+      storageAvailable = false;
+      storageNotice.hidden = false;
+    }
+
+    function loadTasks() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw === null) return;
+        const saved = JSON.parse(raw);
+        if (!Array.isArray(saved) || !saved.every(validTask) ||
+            new Set(saved.map(task => task.id)).size !== saved.length) {
+          throw new Error('Invalid stored tasks');
+        }
+        tasks = saved;
+      } catch (_error) {
+        warnStorage();
+      }
+    }
+
+    function saveTasks() {
+      if (!storageAvailable) return;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      } catch (_error) {
+        warnStorage();
+      }
+    }
+
+    function newId() {
+      let id;
+      do {
+        id = 'task-' + nextId++;
+      } while (tasks.some(task => task.id === id));
+      return id;
+    }
+
+    function formatHours(value) {
+      return value.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' ч';
+    }
+
+    function render() {
+      const total = tasks.reduce((sum, task) => sum + task.hours, 0);
+      const done = tasks.reduce((sum, task) => sum + (task.done ? task.hours : 0), 0);
+      const progress = total === 0 ? 0 : Math.round(100 * done / total);
+      document.getElementById('total-hours').textContent = formatHours(total);
+      document.getElementById('done-hours').textContent = formatHours(done);
+      document.getElementById('progress').textContent = progress + '%';
+
+      filterButtons.forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.filter === filter));
+      });
+
+      const visible = tasks.filter(task =>
+        filter === 'all' || (filter === 'active' ? !task.done : task.done)
+      );
+      list.replaceChildren();
+      emptyMessage.hidden = visible.length !== 0;
+
+      for (const task of visible) {
+        const item = document.createElement('li');
+        item.className = 'task' + (task.done ? ' done' : '');
+
+        const main = document.createElement('div');
+        main.className = 'task-main';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = task.done;
+        checkbox.setAttribute('aria-label', 'Выполнено: ' + task.title);
+        checkbox.addEventListener('change', () => {
+          const target = tasks.find(entry => entry.id === task.id);
+          if (!target) return;
+          target.done = checkbox.checked;
+          saveTasks();
+          render();
+        });
+
+        const info = document.createElement('div');
+        info.className = 'task-info';
+        const name = document.createElement('div');
+        name.className = 'task-title';
+        name.textContent = task.title;
+        const hours = document.createElement('div');
+        hours.className = 'task-hours';
+        hours.textContent = formatHours(task.hours);
+        info.append(name, hours);
+        main.append(checkbox, info);
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'delete';
+        remove.textContent = 'Удалить';
+        remove.setAttribute('aria-label', 'Удалить задачу: ' + task.title);
+        remove.addEventListener('click', () => {
+          tasks = tasks.filter(entry => entry.id !== task.id);
+          saveTasks();
+          render();
+        });
+        item.append(main, remove);
+        list.append(item);
+      }
+    }
+
+    function setError(input, element, message) {
+      element.textContent = message;
+      input.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const title = titleInput.value.trim();
+      const rawHours = hoursInput.value.trim();
+      const hours = rawHours === '' ? NaN : Number(rawHours);
+      const invalidTitle = title === '';
+      const invalidHours = rawHours === '' || !Number.isFinite(hours) ||
+        hours < 0.5 || hours > 24 || !Number.isInteger(hours * 2) ||
+        hoursInput.validity.badInput;
+
+      setError(titleInput, titleError, invalidTitle ? 'Введите название задачи.' : '');
+      setError(hoursInput, hoursError, invalidHours ? 'Введите часы от 0,5 до 24 с шагом 0,5.' : '');
+      if (invalidTitle || invalidHours) return;
+
+      tasks.push({ id: newId(), title, hours, done: false });
+      saveTasks();
+      form.reset();
+      render();
+    });
+
+    filterButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        filter = button.dataset.filter;
+        render();
+      });
+    });
+
+    loadTasks();
+    render();
+  </script>
+</body>
+</html>
